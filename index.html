@@ -1,0 +1,332 @@
+<title>Putt-Tempo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: Rasenfläche mit pendelnder Linie oben, Bedienfeld unten, ein Bildschirm ohne Scrollen. */
+  :root {
+    --turf: #0c1f13;
+    --turf-light: #12301c;
+    --panel: #0a1710;
+    --line: #f4f7f2;
+    --through: #6bff8a;
+    --tee: #e8c547;
+    --red: #ff4d4d;
+    --yellow: #ffd633;
+    --text: #e9f1ea;
+    --muted: #8da596;
+    --chip: #1a3323;
+    --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --font-body: "Barlow", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--panel);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    padding-inline: 0;
+    overflow: hidden;
+  }
+  .app { height: 100%; display: flex; flex-direction: column; }
+
+  .track {
+    position: relative; flex: 1; min-height: 140px; overflow: hidden;
+    background: repeating-linear-gradient(90deg, var(--turf) 0 12.5%, var(--turf-light) 12.5% 25%);
+  }
+  .tee { position: absolute; top: 25%; bottom: 25%; width: 4px; border-radius: 2px; background: var(--tee); opacity: .85; }
+  .tee.l { left: 34px; } .tee.r { right: 34px; }
+  .ball { position: absolute; left: 36px; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2.5px solid rgba(255,255,255,.85); border-radius: 50%; }
+  .bar {
+    position: absolute; top: 14%; bottom: 14%; left: 50%; width: 9px; margin-left: -4.5px; border-radius: 5px;
+    background: var(--line); opacity: .5; box-shadow: 0 0 14px rgba(255,255,255,.35);
+    will-change: transform;
+  }
+  .bar.go { opacity: 1; }
+  .bar.through { background: var(--through); box-shadow: 0 0 16px rgba(107,255,138,.75); }
+  .signal { position: absolute; top: 6px; left: 8px; display: flex; align-items: center; gap: 12px; pointer-events: none; }
+  .signal[hidden] { display: none; }
+  .lamps { display: flex; gap: 6px; padding: 7px; border-radius: 999px; background: rgba(0,0,0,.45); }
+  .lamps i { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.15); }
+  .lamps i.on.r { background: var(--red); } .lamps i.on.y { background: var(--yellow); } .lamps i.on.g { background: var(--through); }
+  .signal b { font: 700 38px/1 var(--font-display); font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+  .signal.r b { color: var(--red); } .signal.y b { color: var(--yellow); } .signal.g b { color: var(--through); }
+  .credit { justify-self: end; margin-top: -4px; font-size: 11px; letter-spacing: .04em; color: var(--muted); opacity: .8; }
+  .hint { position: absolute; left: 16px; right: 16px; bottom: 10px; text-align: center; font-size: 13px; color: var(--muted); }
+  .hint[hidden] { display: none; }
+
+  .panel { background: var(--panel); padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; max-width: 640px; width: 100%; margin-inline: auto; }
+  .dist { display: flex; align-items: baseline; gap: 8px; }
+  .dist output { font-family: var(--font-display); font-weight: 700; font-size: 56px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .dist .unit { font-size: 20px; color: var(--muted); }
+  .dist .spacer { flex: 1; }
+  .ghost { background: var(--chip); color: var(--text); border: 0; border-radius: 10px; padding: 8px 12px; font: 500 14px var(--font-body); cursor: pointer; }
+  .ghost:focus-visible, .chip:focus-visible, .go-btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--through); outline-offset: 2px; }
+
+  input[type=range] { width: 100%; accent-color: var(--through); height: 32px; margin: 0; }
+  .chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .chip { background: var(--chip); color: var(--text); border: 0; border-radius: 10px; padding: 10px 0; font: 600 15px var(--font-body); cursor: pointer; }
+  .chip.on { background: var(--through); color: #06200f; }
+
+  .tempo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tempo strong { font-family: var(--font-display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tempo small { display: block; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; }
+  .seg button { background: none; border: 0; color: var(--muted); font: 600 14px var(--font-body); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  .seg button.on { background: var(--text); color: var(--panel); }
+
+  .go-btn { border: 0; border-radius: 16px; padding: 15px; font: 700 26px var(--font-display); letter-spacing: .04em; text-transform: uppercase; color: #06200f; background: var(--through); cursor: pointer; }
+  .go-btn.stop { background: #ff6b6b; color: #2a0505; }
+
+  .settings { background: var(--chip); border-radius: 14px; padding: 14px; display: grid; gap: 12px; }
+  .settings[hidden] { display: none; }
+  .row { display: grid; gap: 4px; }
+  .row label { display: flex; justify-content: space-between; font-size: 14px; }
+  .row label span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .toggles { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  .toggles label { display: flex; gap: 6px; align-items: center; }
+  .note { margin: 0; font-size: 12px; color: var(--muted); max-width: 60ch; }
+
+  .track { min-width: 0; }
+  /* Während des Trainings nur das Nötigste zeigen, damit die Linie mehr Platz bekommt. */
+  .app.running .fold { display: none; }
+
+  @media (max-height: 640px) { .dist output { font-size: 40px; } .panel { gap: 8px; padding-top: 8px; } }
+
+  /* Querformat: Linie füllt die Fläche, Bedienfeld wird eine schmale Spalte rechts. */
+  @media (orientation: landscape) and (max-height: 600px) {
+    .app { flex-direction: row; }
+    .panel { width: 300px; max-width: 300px; height: 100%; margin: 0; overflow-y: auto; gap: 8px;
+             padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
+    .app.running .panel { width: 210px; max-width: 210px; }
+    .dist output { font-size: 40px; }
+    .chips { grid-template-columns: repeat(3, 1fr); }
+    .chip { padding: 8px 0; }
+    .tempo strong { font-size: 22px; }
+    .go-btn { padding: 10px; font-size: 22px; }
+    .hint { bottom: 6px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bar { box-shadow: none; } }
+</style>
+
+<div class="app" id="app">
+  <div class="track" id="track" aria-label="Metronom-Linie">
+    <div class="tee l"></div><div class="tee r"></div>
+    <div class="ball"></div>
+    <div class="bar" id="bar"></div>
+    <div class="signal" id="signal" hidden><div class="lamps" id="lamps"><i class="r"></i><i class="y"></i><i class="g"></i></div><b id="num">0.0</b></div>
+    <div class="hint" id="hint">Handy flach neben den Ball legen, Start drücken und den Putter mit der Linie schwingen. Der Ball liegt links. Beim hohen Ping startet der Rückschwung, der Klick ist der Treffmoment.</div>
+  </div>
+
+  <div class="panel">
+    <div class="dist">
+      <output id="distOut">3.0</output><span class="unit" id="unitOut">m</span>
+      <span class="spacer"></span>
+      <button class="ghost fold" id="setBtn" aria-expanded="false" aria-controls="settings">Einstellungen</button>
+    </div>
+    <input type="range" class="fold" id="dist" aria-label="Putt-Distanz" min="0.5" max="12" step="0.1" value="3">
+    <div class="chips" id="chips"></div>
+
+    <div class="tempo">
+      <div><strong id="cycleOut">1.10 s pro Putt</strong><small id="splitOut">Rück 0.73 s · Durch 0.37 s</small></div>
+      <div class="seg fold" id="ratioSeg" role="group" aria-label="Verhältnis Rückschwung zu Durchschwung">
+        <button data-r="1">1:1</button><button data-r="2" class="on">2:1</button><button data-r="3">3:1</button>
+      </div>
+    </div>
+
+    <div class="settings" id="settings" hidden>
+      <div class="row" id="rowShort"><label for="tShort">Tempo bei 1 m <span id="tShortOut"></span></label><input type="range" id="tShort" min="0.5" max="3" step="0.05" value="0.95"></div>
+      <div class="row" id="rowLong"><label for="tLong">Tempo bei 10 m <span id="tLongOut"></span></label><input type="range" id="tLong" min="0.5" max="3" step="0.05" value="1.6"></div>
+      <div class="row" id="rowManual" hidden><label for="tManual">Sekunden pro Putt <span id="tManualOut"></span></label><input type="range" id="tManual" min="0.5" max="3" step="0.05" value="1.2"></div>
+      <div class="row"><label for="tPause">Abstand zwischen Putts <span id="tPauseOut"></span></label><input type="range" id="tPause" min="0.5" max="10" step="0.5" value="2"></div>
+      <div class="row"><label for="signalMode">Anzeige vor dem Start</label>
+        <select id="signalMode"><option value="both">Zahl und Ampel</option><option value="number">Nur Zahl</option><option value="light">Nur Ampel</option><option value="off">Aus</option></select></div>
+      <div class="toggles">
+        <label><input type="checkbox" id="manual"> Tempo manuell</label>
+        <label><input type="checkbox" id="sound" checked> Ton</label>
+        <label><input type="checkbox" id="feet"> Fuß statt Meter</label>
+      </div>
+      <p class="note">Zwischen 1 m und 10 m wird das Tempo gleichmäßig verteilt. Gleiche Werte bei 1 m und 10 m ergeben ein konstantes Tempo für alle Distanzen. Hoher Ping = Rückschwung starten, tiefer Ton = Umkehrpunkt rechts, Klick = Treffmoment am Ball. Danach ruht die Linie links, bis der nächste Ping kommt.</p>
+    </div>
+
+    <button class="go-btn" id="go">Start</button>
+    <div class="credit">Kim B / Claude AI</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "putt-tempo-v1";
+  var S = { distM: 3, tShort: 0.95, tLong: 1.6, tManual: 1.2, pause: 2, signal: "both", manual: false, ratio: 2, sound: true, feet: false };
+  try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  var M_PER_FT = 0.3048;
+  function fmt(x, d) { return x.toFixed(d); }
+
+  // Timing, identisch zur iOS-App: Phase 0..1, Ball links. Rückschwung links->rechts,
+  // Durchschwung rechts->links (beschleunigt). Treffmoment = Linie kommt links an (Phase 1 = 0).
+  function cycle() {
+    if (S.manual) return S.tManual;
+    var t = Math.min(Math.max((S.distM - 1) / 9, 0), 1);
+    return S.tShort + (S.tLong - S.tShort) * t;
+  }
+  function backFrac() { return S.ratio / (S.ratio + 1); }
+  function position(p) {
+    var f = backFrac();
+    if (p < f) return -Math.cos(Math.PI * (p / f));
+    return 2 * Math.cos(Math.PI * ((p - f) / (1 - f)) / 2) - 1;
+  }
+
+  // Zustand
+  // Ablauf je Putt: Startping -> Rückschwung -> tiefer Ton rechts -> Durchschwung -> Klick am Ball -> Pause -> Startping ...
+  var LEAD_IN = 1.5;
+  var running = false, anchor = 0, lastT = 0, raf = 0, wake = null, ac = null;
+  function now() { return performance.now() / 1000; }
+  function period() { return cycle() + S.pause; }
+  function restart() { anchor = now() + LEAD_IN; lastT = now(); }   // Übung neu beginnen, wenn sich Werte ändern
+  function occurred(offset, t) {
+    var P = period();
+    var n = Math.floor((t - anchor - offset) / P), nl = Math.floor((lastT - anchor - offset) / P);
+    return n > nl && n >= 0;
+  }
+
+  // Ton: start = hoher Ping, turn = tiefer Klick, finish = Klick am Ball
+  var TONES = { start: [1760, 0.7, 0.16, 0.3], turn: [660, 0.3, 0.07, 0], finish: [1320, 0.8, 0.1, 0] };
+  function beep(kind) {
+    if (!S.sound || !ac) return;
+    var d = TONES[kind], t = ac.currentTime, g = ac.createGain();
+    var peak = d[1], len = d[2];
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    g.connect(ac.destination);
+    var o = ac.createOscillator(); o.frequency.value = d[0]; o.connect(g); o.start(t); o.stop(t + len + 0.02);
+    if (d[3] > 0) {   // heller Oberton für den Start-Ping
+      var og = ac.createGain(); og.gain.value = d[3]; og.connect(g);
+      var o2 = ac.createOscillator(); o2.frequency.value = d[0] * 2; o2.connect(og); o2.start(t); o2.stop(t + len + 0.02);
+    }
+  }
+
+  // Zähler und Ampel oben links
+  var sig = $("signal"), lampEls = $("lamps").children, numEl = $("num"), lastSig = "";
+  function showSignal(show, light, text) {
+    var key = show + "|" + light + "|" + text + "|" + S.signal;
+    if (key === lastSig) return;
+    lastSig = key;
+    sig.hidden = !show;
+    if (!show) return;
+    $("lamps").hidden = !(S.signal === "both" || S.signal === "light");
+    numEl.hidden = !(S.signal === "both" || S.signal === "number");
+    numEl.textContent = text;
+    sig.className = "signal " + light;
+    Array.prototype.forEach.call(lampEls, function (el) { el.classList.toggle("on", el.className.split(" ")[0] === light); });
+  }
+
+  // Zeichnen
+  var track = $("track"), bar = $("bar");
+  function draw() {
+    var half = track.clientWidth / 2 - 36, pos = -1, through = false;
+    var moving = false, remaining = 0, light = "";
+    if (running) {
+      var t = now(), c = cycle(), tau = t - anchor;
+      if (occurred(0, t)) beep("start");
+      if (occurred(c * backFrac(), t)) beep("turn");
+      if (occurred(c, t)) beep("finish");     // Treffmoment: Linie erreicht den Ball links
+      lastT = t;
+      if (tau < 0) { remaining = -tau; }
+      else {
+        var local = tau % period();
+        if (local < c) { var p = local / c; pos = position(p); through = p >= backFrac(); moving = true; }
+        else { remaining = period() - local; }
+      }
+      light = moving ? "g" : (remaining > 1 ? "r" : "y");   // Rot = warten, Gelb = letzte Sekunde, Grün = Putt läuft
+    }
+    showSignal(running && S.signal !== "off", light, (Math.ceil(remaining * 2) / 2).toFixed(1));
+    bar.style.transform = "translateX(" + (pos * half) + "px)";
+    bar.classList.toggle("go", moving);
+    bar.classList.toggle("through", moving && through);
+    raf = requestAnimationFrame(draw);
+  }
+
+  async function start() {
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") await ac.resume();
+    } catch (e) {}
+    running = true; restart();
+    $("app").classList.add("running"); $("settings").hidden = true;
+    $("go").textContent = "Stopp"; $("go").classList.add("stop");
+    $("hint").hidden = true;
+    try { if (navigator.wakeLock) wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; }
+  }
+  function stop() {
+    running = false;
+    $("app").classList.remove("running");
+    $("go").textContent = "Start"; $("go").classList.remove("stop");
+    try { if (wake) wake.release(); } catch (e) {} wake = null;
+  }
+  $("go").addEventListener("click", function () { running ? stop() : start(); });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && running) stop(); });
+
+  // Bedienelemente
+  function dispDist() { return S.feet ? S.distM / M_PER_FT : S.distM; }
+  function setDist(v) { S.distM = S.feet ? v * M_PER_FT : v; }
+  function buildChips() {
+    var list = S.feet ? [3, 6, 10, 15, 25, 35] : [1, 2, 3, 5, 8, 10];
+    $("chips").innerHTML = "";
+    list.forEach(function (v) {
+      var b = document.createElement("button");
+      b.className = "chip"; b.textContent = v; b.dataset.v = v;
+      b.addEventListener("click", function () { var pc = cycle(); setDist(v); render(pc); });
+      $("chips").appendChild(b);
+    });
+  }
+  function render(prevCycle) {
+    var c = cycle(), f = backFrac();
+    if (prevCycle && running) restart();
+    var sl = $("dist");
+    sl.min = S.feet ? 2 : 0.5; sl.max = S.feet ? 40 : 12; sl.step = S.feet ? 1 : 0.1;
+    sl.value = dispDist();
+    $("distOut").textContent = fmt(dispDist(), S.feet ? 0 : 1);
+    $("unitOut").textContent = S.feet ? "ft" : "m";
+    $("cycleOut").textContent = fmt(c, 2) + " s pro Putt";
+    $("splitOut").textContent = "Rück " + fmt(c * f, 2) + " s · Durch " + fmt(c * (1 - f), 2) + " s";
+    Array.prototype.forEach.call($("chips").children, function (b) {
+      b.classList.toggle("on", Math.abs(dispDist() - Number(b.dataset.v)) < (S.feet ? 0.5 : 0.05));
+    });
+    Array.prototype.forEach.call($("ratioSeg").children, function (b) { b.classList.toggle("on", Number(b.dataset.r) === S.ratio); });
+    $("tShort").value = S.tShort; $("tLong").value = S.tLong; $("tManual").value = S.tManual;
+    $("tShortOut").textContent = fmt(S.tShort, 2) + " s";
+    $("tLongOut").textContent = fmt(S.tLong, 2) + " s";
+    $("tManualOut").textContent = fmt(S.tManual, 2) + " s";
+    $("tPause").value = S.pause; $("tPauseOut").textContent = fmt(S.pause, 1) + " s";
+    $("signalMode").value = S.signal;
+    $("rowShort").hidden = $("rowLong").hidden = S.manual;
+    $("rowManual").hidden = !S.manual;
+    $("manual").checked = S.manual; $("sound").checked = S.sound; $("feet").checked = S.feet;
+    save();
+  }
+
+  $("dist").addEventListener("input", function (e) { var pc = cycle(); setDist(Number(e.target.value)); render(pc); });
+  Array.prototype.forEach.call($("ratioSeg").children, function (b) {
+    b.addEventListener("click", function () { var pc = cycle(); S.ratio = Number(b.dataset.r); render(pc); });
+  });
+  [["tShort", "tShort"], ["tLong", "tLong"], ["tManual", "tManual"], ["tPause", "pause"]].forEach(function (p) {
+    $(p[0]).addEventListener("input", function (e) { var pc = cycle(); S[p[1]] = Number(e.target.value); render(pc); });
+  });
+  $("manual").addEventListener("change", function (e) { var pc = cycle(); S.manual = e.target.checked; render(pc); });
+  $("signalMode").addEventListener("change", function (e) { S.signal = e.target.value; render(); });
+  $("sound").addEventListener("change", function (e) { S.sound = e.target.checked; render(); });
+  $("feet").addEventListener("change", function (e) { S.feet = e.target.checked; buildChips(); render(); });
+  $("setBtn").addEventListener("click", function () {
+    var s = $("settings"); s.hidden = !s.hidden; $("setBtn").setAttribute("aria-expanded", String(!s.hidden));
+  });
+
+  buildChips(); render(); draw();
+  window.__putt = { S: S, position: position, cycle: cycle, isRunning: function () { return running; } };
+})();
+</script>
