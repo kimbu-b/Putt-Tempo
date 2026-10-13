@@ -100,6 +100,11 @@
   .toggles label { display: flex; gap: 6px; align-items: center; }
   .note { margin: 0; font-size: 12px; color: var(--muted); max-width: 60ch; }
 
+
+  .lhud, .lhint, .lcredit { display: none; }
+  .lchip { background: rgba(0,0,0,.4); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 8px; }
+  .lchip button { width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,.18); color: var(--text); font-size: 18px; line-height: 1; }
+  .app.running #lPauseBox { display: none; }
   .track { min-width: 0; }
   /* Während des Trainings nur das Nötigste zeigen, damit die Linie mehr Platz bekommt. */
   .app.running .fold { display: none; }
@@ -109,7 +114,14 @@
   /* Querformat: Linie füllt die Fläche, Bedienfeld wird eine schmale Spalte rechts. */
   @media (orientation: landscape) and (max-height: 600px) {
     .app { flex-direction: row; }
-    .panel { width: 300px; max-width: 300px; height: 100%; margin: 0; overflow-y: auto; gap: 8px;
+    .panel { display: none; }
+    .track { flex: 1; width: 100%; }
+    .hint { display: none; }
+    .lhud { display: flex; gap: 8px; align-items: center; position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); left: 190px; pointer-events: auto; }
+    .lhint { display: block; position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12px; color: var(--muted); pointer-events: none; }
+    .app.running .lhint { display: none; }
+    .lcredit { display: block; position: absolute; right: calc(10px + env(safe-area-inset-right, 0px)); bottom: 6px; font-size: 11px; color: var(--muted); opacity: .8; pointer-events: none; }
+    .panel-old { width: 300px; max-width: 300px; height: 100%; margin: 0; overflow-y: auto; gap: 8px;
              padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
     .app.running .panel { width: 210px; max-width: 210px; }
     .dist output { font-size: 40px; }
@@ -131,6 +143,9 @@
     <div class="ball"></div>
     <div class="bar" id="bar"></div>
     <div class="signal" id="signal" hidden><div class="lamps" id="lamps"><i class="r"></i><i class="y"></i><i class="g"></i></div><b id="num">0.0</b></div>
+    <div class="lhud" id="lhud"><span class="lchip" id="lInfo"></span><span class="lchip lp" id="lPauseBox">Abstand <button type="button" id="pMinus" aria-label="Weniger">−</button><b id="pVal"></b><button type="button" id="pPlus" aria-label="Mehr">+</button></span></div>
+    <div class="lhint" id="lhint">Tippen = Start/Stopp · Hochkant = Einstellungen</div>
+    <div class="lcredit">Kim B / Claude AI</div>
     <div class="hint" id="hint">Handy flach neben den Ball legen, Start drücken und den Putter mit der Linie schwingen. Der Ball liegt links. Beim hohen Ping startet der Rückschwung, der Klick ist der Treffmoment.</div>
   </div>
 
@@ -319,6 +334,8 @@
     $("tManualOut").textContent = fmt(S.tManual, 2) + " s";
     $("tPause").value = S.pause; $("tPauseOut").textContent = fmt(S.pause, 1) + " s";
     $("signalMode").value = S.signal;
+    $("lInfo").textContent = fmt(dispDist(), S.feet ? 0 : 1) + (S.feet ? " ft" : " m") + " · " + fmt(c, 2) + " s";
+    $("pVal").textContent = fmt(S.pause, 1) + " s";
     $("rowShort").hidden = $("rowLong").hidden = S.manual;
     $("rowManual").hidden = !S.manual;
     $("manual").checked = S.manual; $("sound").checked = S.sound; $("feet").checked = S.feet;
@@ -334,6 +351,11 @@
   });
   $("manual").addEventListener("change", function (e) { var pc = cycle(); S.manual = e.target.checked; render(pc); });
   $("signalMode").addEventListener("change", function (e) { S.signal = e.target.value; render(); });
+  var LAND = window.matchMedia("(orientation: landscape) and (max-height: 600px)");
+  $("track").addEventListener("click", function () { if (LAND.matches) { running ? stop() : start(); } });
+  $("lhud").addEventListener("click", function (e) { e.stopPropagation(); });
+  $("pMinus").addEventListener("click", function () { var pc = cycle(); S.pause = Math.max(0.5, S.pause - 0.5); render(pc); });
+  $("pPlus").addEventListener("click", function () { var pc = cycle(); S.pause = Math.min(10, S.pause + 0.5); render(pc); });
   $("sound").addEventListener("change", function (e) { S.sound = e.target.checked; render(); });
   $("feet").addEventListener("change", function (e) { S.feet = e.target.checked; buildChips(); render(); });
   $("setBtn").addEventListener("click", function () {
